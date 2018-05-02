@@ -54,6 +54,8 @@
   <depend>mavros_msgs</depend>
   <depend>nodelet</depend>
   <depend>roscpp</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

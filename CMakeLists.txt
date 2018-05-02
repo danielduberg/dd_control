@@ -12,6 +12,8 @@ find_package(catkin REQUIRED COMPONENTS
   mavros_msgs
   nodelet
   roscpp
+  tf2
+  tf2_ros
 )
 
 ## System dependencies are found with CMake's conventions

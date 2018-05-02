@@ -1,5 +1,6 @@
 #include <ros/ros.h>
 #include <geometry_msgs/TwistStamped.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <mavros_msgs/RCIn.h>
 
 namespace dd_control
@@ -10,12 +11,12 @@ private:
   ros::NodeHandle nh_;
 
   ros::Subscriber collision_free_control_sub_;
-  ros::Subscriber raw_control_sub_;
+  ros::Subscriber setpoint_sub_;
   ros::Subscriber rc_sub_;
 
   ros::Publisher control_pub_;
 
-  bool send_raw_control;
+  int mode_;
 
 public:
   Control(ros::NodeHandle& nh);
@@ -24,7 +25,7 @@ private:
   void collisionFreeControlCallback(
       const geometry_msgs::TwistStamped::ConstPtr& msg);
 
-  void rawControlCallback(const geometry_msgs::TwistStamped::ConstPtr& msg);
+  void setpointCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
 
   void rcCallback(const mavros_msgs::RCIn::ConstPtr& msg);
 };

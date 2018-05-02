@@ -1,16 +1,15 @@
 #include <dd_control/control.h>
+#include <tf2/utils.h>
 
 namespace dd_control
 {
-Control::Control(ros::NodeHandle& nh) : nh_(nh)
+Control::Control(ros::NodeHandle& nh) : nh_(nh), mode_(0)
 {
-  send_raw_control = false;
-
   collision_free_control_sub_ = nh_.subscribe<geometry_msgs::TwistStamped>(
       "/collision_free_control", 1, &Control::collisionFreeControlCallback,
       this);
-  raw_control_sub_ = nh_.subscribe<geometry_msgs::TwistStamped>(
-      "/raw_control", 1, &Control::rawControlCallback, this);
+  setpoint_sub_ = nh_.subscribe<geometry_msgs::PoseStamped>(
+      "/setpoint", 1, &Control::setpointCallback, this);
   rc_sub_ = nh_.subscribe<mavros_msgs::RCIn>("/mavros/rc/in", 1,
                                              &Control::rcCallback, this);
 
@@ -21,21 +20,27 @@ Control::Control(ros::NodeHandle& nh) : nh_(nh)
 void Control::collisionFreeControlCallback(
     const geometry_msgs::TwistStamped::ConstPtr& msg)
 {
-  if (!send_raw_control)
+  if (mode_ == 0)
   {
     control_pub_.publish(msg);
   }
 }
 
-void Control::rawControlCallback(
-    const geometry_msgs::TwistStamped::ConstPtr& msg)
+void Control::setpointCallback(
+    const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
-  if (send_raw_control)
+  if (mode_ == 1)
   {
     geometry_msgs::TwistStamped out;
-    out = *msg;
-    //out.twist.linear.x =
-    //out.twist.angular.z = std::min(out.twist.angular.z
+    out.header = msg->header;
+    out.twist.linear.x = std::min(msg->pose.position.x, 0.25);
+    out.twist.linear.x = std::max(out.twist.linear.x, -0.25);
+    out.twist.linear.y = std::min(msg->pose.position.y, 0.25);
+    out.twist.linear.y = std::max(out.twist.linear.y, -0.25);
+    out.twist.linear.z = std::min(msg->pose.position.z, 0.25);
+    out.twist.linear.z = std::max(out.twist.linear.z, -0.25);
+    out.twist.angular.z = std::min(tf2::getYaw(msg->pose.orientation), 0.17);
+    out.twist.angular.z = std::max(out.twist.angular.z, -0.17);
 
     control_pub_.publish(out);
   }
@@ -43,6 +48,17 @@ void Control::rawControlCallback(
 
 void Control::rcCallback(const mavros_msgs::RCIn::ConstPtr& msg)
 {
-  send_raw_control = msg->channels[0] > 1400;
+  if (msg->channels[6] < 1100)
+  {
+    mode_ = 0;
+  }
+  else if (msg->channels[6] >= 1100 && msg->channels[6] <= 1900)
+  {
+    mode_ = 1;
+  }
+  else
+  {
+    mode_ = 2;
+  }
 }
 }
