@@ -12,7 +12,10 @@ private:
   Control* control_;
 
 public:
-  virtual void onInit() { control_ = new Control(getNodeHandle()); }
+  virtual void onInit()
+  {
+    control_ = new Control(getNodeHandle(), getPrivateNodeHandle());
+  }
 };
 }
 
