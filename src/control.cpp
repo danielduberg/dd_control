@@ -101,7 +101,6 @@ void Control::velocityCallback(const geometry_msgs::TwistStamped::ConstPtr& msg)
       out.pose = current_pose_.pose;
     }
 
-    std::cout << "Publishing velocity" << std::endl;
     control_pub_.publish(out);
   }
   pub_timer_.start();
@@ -169,8 +168,6 @@ void Control::timerPublish(const ros::TimerEvent& event)
 
 void Control::setpointPublish(const geometry_msgs::PoseStamped& setpoint)
 {
-  std::cout << "Publishing setpoint" << std::endl;
-
   geometry_msgs::PoseStamped out;
   try
   {
