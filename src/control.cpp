@@ -4,7 +4,7 @@
 namespace dd_control
 {
 Control::Control(ros::NodeHandle& nh, ros::NodeHandle& nh_priv)
-    : nh_(nh), nh_priv_(nh_priv), mode_(0)
+    : nh_(nh), nh_priv_(nh_priv), mode_(1)
 {
   output_frame_ = nh_priv_.param<std::string>("output_frame", "map");
   std::string velocity_topic =
