@@ -42,6 +42,7 @@ private:
   // Max velocity
   double max_x_vel_;
   double max_y_vel_;
+  double max_xy_vel_;
   double max_z_vel_;
 
   // P-controller
@@ -73,4 +74,4 @@ private:
 
   double clamp(double value, double min, double max);
 };
-}
+}  // namespace dd_control
