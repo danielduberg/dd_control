@@ -4,8 +4,12 @@
 namespace dd_control
 {
 Control::Control(ros::NodeHandle& nh, ros::NodeHandle& nh_priv)
-  : nh_(nh), nh_priv_(nh_priv), mode_(1)
+  : nh_(nh), nh_priv_(nh_priv), cs_(nh_priv_), mode_(1)
 {
+  // Set up dynamic reconfigure server
+  f_ = boost::bind(&Control::configCallback, this, _1, _2);
+  cs_.setCallback(f_);
+
   output_frame_ = nh_priv_.param<std::string>("output_frame", "map");
   std::string velocity_topic = nh_priv_.param<std::string>("velocity_topic", "/collision_"
                                                                              "free_"
@@ -25,17 +29,6 @@ Control::Control(ros::NodeHandle& nh, ros::NodeHandle& nh_priv)
                                                                    "setpoint_position/"
                                                                    "local");
 
-  max_x_vel_ = nh_priv_.param<double>("max_x_vel", 1.0);
-  max_y_vel_ = nh_priv_.param<double>("max_y_vel", 1.0);
-  max_xy_vel_ = nh_priv_.param<double>("max_xy_vel", 1.0);
-  max_z_vel_ = nh_priv_.param<double>("max_z_vel", 1.0);
-
-  k_p_x_ = nh_priv_.param<double>("k_p_x", 1.0);
-  k_p_y_ = nh_priv_.param<double>("k_p_y", 1.0);
-  k_p_z_ = nh_priv_.param<double>("k_p_z", 1.0);
-
-  double frequency = nh_priv_.param<double>("frequency", 10);
-
   tf_listener_ = new tf2_ros::TransformListener(tf_buffer_);
 
   velocity_sub_ = nh_.subscribe<geometry_msgs::TwistStamped>(
@@ -53,9 +46,6 @@ Control::Control(ros::NodeHandle& nh, ros::NodeHandle& nh_priv)
       nh_.subscribe<nav_msgs::Odometry>(odom_topic, 10, &Control::odomCallback, this);
 
   control_pub_ = nh_.advertise<geometry_msgs::PoseStamped>(out_topic, 10);
-
-  pub_timer_ =
-      nh_.createTimer(ros::Rate(frequency), &Control::timerPublish, this, false, false);
 }
 
 void Control::velocityCallback(const geometry_msgs::TwistStamped::ConstPtr& msg)
@@ -67,16 +57,16 @@ void Control::velocityCallback(const geometry_msgs::TwistStamped::ConstPtr& msg)
     setpoint.header = msg->header;
 
     // http://robotsforroboticists.com/pid-control/
-    double desired_x_vel = clamp(msg->twist.linear.x, -max_x_vel_, max_x_vel_);
-    double desired_y_vel = clamp(msg->twist.linear.y, -max_y_vel_, max_y_vel_);
+    double desired_x_vel = clamp(msg->twist.linear.x, -max_xy_vel_, max_xy_vel_);
+    double desired_y_vel = clamp(msg->twist.linear.y, -max_xy_vel_, max_xy_vel_);
     double desired_z_vel = clamp(msg->twist.linear.z, -max_z_vel_, max_z_vel_);
 
     double error_x_vel = desired_x_vel - current_local_velocity_.twist.linear.x;
     double error_y_vel = desired_y_vel - current_local_velocity_.twist.linear.y;
     double error_z_vel = desired_z_vel - current_local_velocity_.twist.linear.z;
 
-    setpoint.pose.position.x = k_p_x_ * error_x_vel;
-    setpoint.pose.position.y = k_p_y_ * error_y_vel;
+    setpoint.pose.position.x = k_p_xy_ * error_x_vel;
+    setpoint.pose.position.y = k_p_xy_ * error_y_vel;
     setpoint.pose.position.z = k_p_z_ * error_z_vel;
 
     tf2::Quaternion q;
@@ -185,7 +175,7 @@ void Control::setpointPublish(const geometry_msgs::PoseStamped& setpoint)
     out.pose = current_pose_.pose;
   }
 
-  // http://robotsforroboticists.com/pid-control/
+  // http:  // robotsforroboticists.com/pid-control/
   double desired_x_vel = out.pose.position.x - current_pose_.pose.position.x;
   double desired_y_vel = out.pose.position.y - current_pose_.pose.position.y;
   double desired_z_vel =
@@ -200,8 +190,8 @@ void Control::setpointPublish(const geometry_msgs::PoseStamped& setpoint)
   double error_y_vel = desired_y_vel - current_global_velocity_.twist.linear.y;
   double error_z_vel = desired_z_vel - current_global_velocity_.twist.linear.z;
 
-  out.pose.position.x = current_pose_.pose.position.x + (k_p_x_ * error_x_vel);
-  out.pose.position.y = current_pose_.pose.position.y + (k_p_y_ * error_y_vel);
+  out.pose.position.x = current_pose_.pose.position.x + (k_p_xy_ * error_x_vel);
+  out.pose.position.y = current_pose_.pose.position.y + (k_p_xy_ * error_y_vel);
   out.pose.position.z = current_pose_.pose.position.z + (k_p_z_ * error_z_vel);
 
   control_pub_.publish(out);
@@ -210,5 +200,39 @@ void Control::setpointPublish(const geometry_msgs::PoseStamped& setpoint)
 double Control::clamp(double value, double min, double max)
 {
   return std::max(std::min(value, max), min);
+}
+
+void Control::configCallback(dd_control::ControlConfig& config, uint32_t level)
+{
+  max_xy_vel_ = config.max_xy_vel;
+  max_z_vel_ = config.max_z_vel;
+
+  k_p_xy_ = config.k_p_xy;
+  k_i_xy_ = config.k_i_xy;
+  k_d_xy_ = config.k_d_xy;
+
+  k_p_z_ = config.k_p_z;
+  k_i_z_ = config.k_i_z;
+  k_d_z_ = config.k_d_z;
+
+  if (config.frequency != frequency_)
+  {
+    if (0 == frequency_)
+    {
+      pub_timer_.stop();
+    }
+    else
+    {
+      pub_timer_ = nh_.createTimer(ros::Rate(frequency_), &Control::timerPublish, this,
+                                   false, false);
+    }
+  }
+  else if (!pub_timer_.hasStarted() && 0 != frequency_)
+  {
+    pub_timer_ = nh_.createTimer(ros::Rate(frequency_), &Control::timerPublish, this,
+                                 false, false);
+  }
+
+  frequency_ = config.frequency;
 }
 }  // namespace dd_control

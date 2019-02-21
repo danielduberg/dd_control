@@ -5,6 +5,8 @@
 #include <mavros_msgs/RCIn.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <dynamic_reconfigure/server.h>
+#include <dd_control/ControlConfig.h>
 
 namespace dd_control
 {
@@ -18,6 +20,7 @@ private:
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener* tf_listener_;
 
+  // Subscribers
   ros::Subscriber velocity_sub_;
   ros::Subscriber setpoint_sub_;
   ros::Subscriber cancel_sub_;
@@ -26,9 +29,15 @@ private:
   ros::Subscriber current_velocity_sub_;
   ros::Subscriber odom_sub_;
 
+  // Publishers
   ros::Publisher control_pub_;
 
+  // Timers
   ros::Timer pub_timer_;
+
+  // Dynamic reconfigure
+  dynamic_reconfigure::Server<dd_control::ControlConfig> cs_;
+  dynamic_reconfigure::Server<dd_control::ControlConfig>::CallbackType f_;
 
   int mode_;
 
@@ -40,15 +49,21 @@ private:
   geometry_msgs::TwistStamped current_local_velocity_;
 
   // Max velocity
-  double max_x_vel_;
-  double max_y_vel_;
   double max_xy_vel_;
   double max_z_vel_;
 
-  // P-controller
-  double k_p_x_;
-  double k_p_y_;
+  // XY PID-controller
+  double k_p_xy_;
+  double k_i_xy_;
+  double k_d_xy_;
+
+  // Z PID-controller
   double k_p_z_;
+  double k_i_z_;
+  double k_d_z_;
+
+  // Frequency
+  int frequency_;
 
 public:
   Control(ros::NodeHandle& nh, ros::NodeHandle& nh_priv);
@@ -73,5 +88,7 @@ private:
   void setpointPublish(const geometry_msgs::PoseStamped& setpoint);
 
   double clamp(double value, double min, double max);
+
+  void configCallback(dd_control::ControlConfig& config, uint32_t level);
 };
 }  // namespace dd_control
